@@ -11,7 +11,7 @@ import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/V
  * @dev Raffle contract for the Raffle dapp
  *
  */
-contract Raffel is VRFConsumerBaseV2Plus {
+contract Raffle is VRFConsumerBaseV2Plus {
     error Raffle__UpkeepNotNeeded(
         uint256 currentBalance,
         uint256 numPlayers,
@@ -160,5 +160,12 @@ contract Raffel is VRFConsumerBaseV2Plus {
         if (!success) {
             revert Raffel_NotTransfered();
         }
+    }
+
+    function getRaffelState() external view returns (RaffelState) {
+        return s_raffelState;
+    }
+    function getPlayer(uint256 index) external view returns (address) {
+        return s_players[index];
     }
 }
