@@ -117,6 +117,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     // }
 
     function performUpkeep(bytes calldata /* performData */) external {
+        // since func is external validation implemented 
         (bool upkeepNeeded, ) = checkUpkeep("");
         if (!upkeepNeeded) {
             revert Raffle__UpkeepNotNeeded(
@@ -140,9 +141,6 @@ contract Raffle is VRFConsumerBaseV2Plus {
         );
     }
 
-    function getTicketFee() external view returns (uint256) {
-        return i_ticketFee;
-    }
 
     function fulfillRandomWords(
         uint256 requestId,
@@ -162,10 +160,17 @@ contract Raffle is VRFConsumerBaseV2Plus {
         }
     }
 
+    //////////////////////////// 
+    /////// GETTER FUNCTIONS ////
+    ////////////////////////////
+
     function getRaffelState() external view returns (RaffelState) {
         return s_raffelState;
     }
     function getPlayer(uint256 index) external view returns (address) {
         return s_players[index];
+    }
+    function getTicketFee() external view returns (uint256) {
+        return i_ticketFee;
     }
 }
