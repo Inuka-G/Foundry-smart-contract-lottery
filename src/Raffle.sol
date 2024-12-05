@@ -12,18 +12,16 @@ import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/V
  *
  */
 contract Raffle is VRFConsumerBaseV2Plus {
-    error Raffle__UpkeepNotNeeded(
-        uint256 currentBalance,
-        uint256 numPlayers,
-        uint256 raffleState
-    );
+    error Raffle__UpkeepNotNeeded(uint256 currentBalance, uint256 numPlayers, uint256 raffleState);
     error Raffel_notEnoughEth();
     error Raffel_NotTransfered();
     error Raffel_notOpen();
+
     enum RaffelState {
         OPEN,
         CALCULATING
     }
+
     uint256 private immutable i_subscriptionId;
     bytes32 private immutable i_gasLane;
     uint32 private immutable i_callbackGasLimit;
@@ -36,8 +34,10 @@ contract Raffle is VRFConsumerBaseV2Plus {
     address private s_recentWinner;
     RaffelState private s_raffelState;
     address payable[] private s_players; // address array payable
+
     event RaffelEntered(address indexed player);
     event RaffelWinner(address indexed winner);
+    event RequestedRandomness(uint256 indexed requestId);
 
     constructor(
         uint256 ticketFee,
@@ -77,13 +77,13 @@ contract Raffle is VRFConsumerBaseV2Plus {
      * 3. The contract has ETH.
      * 4. Implicity, your subscription is funded with LINK.
      */
-
-    function checkUpkeep(
-        bytes memory /* checkData */
-    ) public view returns (bool upkeepNeeded, bytes memory /* performData */) {
+    function checkUpkeep(bytes memory /* checkData */ )
+        public
+        view
+        returns (bool upkeepNeeded, bytes memory /* performData */ )
+    {
         bool isOpen = RaffelState.OPEN == s_raffelState;
-        bool timePassed = ((block.timestamp - s_lastTimeStamp) >
-            i_intervalinSeconds);
+        bool timePassed = ((block.timestamp - s_lastTimeStamp) > i_intervalinSeconds);
         bool hasPlayers = s_players.length > 0;
         bool hasBalance = address(this).balance > 0;
         upkeepNeeded = (timePassed && isOpen && hasBalance && hasPlayers);
@@ -116,15 +116,11 @@ contract Raffle is VRFConsumerBaseV2Plus {
     //     );
     // }
 
-    function performUpkeep(bytes calldata /* performData */) external {
-        // since func is external validation implemented 
-        (bool upkeepNeeded, ) = checkUpkeep("");
+    function performUpkeep(bytes calldata /* performData */ ) external {
+        // since func is external validation implemented
+        (bool upkeepNeeded,) = checkUpkeep("");
         if (!upkeepNeeded) {
-            revert Raffle__UpkeepNotNeeded(
-                address(this).balance,
-                s_players.length,
-                uint256(s_raffelState)
-            );
+            revert Raffle__UpkeepNotNeeded(address(this).balance, s_players.length, uint256(s_raffelState));
         }
         s_raffelState = RaffelState.CALCULATING;
         uint256 requestId = s_vrfCoordinator.requestRandomWords(
@@ -134,18 +130,13 @@ contract Raffle is VRFConsumerBaseV2Plus {
                 requestConfirmations: REQUEST_CONFIRMATIONS,
                 callbackGasLimit: i_callbackGasLimit,
                 numWords: NUM_WORDS,
-                extraArgs: VRFV2PlusClient._argsToBytes(
-                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
-                )
+                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
             })
         );
+        emit RequestedRandomness(requestId);
     }
 
-
-    function fulfillRandomWords(
-        uint256 requestId,
-        uint256[] calldata randomWords
-    ) internal virtual override {
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal virtual override {
         uint256 winnerIndex = randomWords[0] % s_players.length;
         address payable winner = s_players[winnerIndex];
         s_recentWinner = winner;
@@ -154,23 +145,33 @@ contract Raffle is VRFConsumerBaseV2Plus {
         s_raffelState = RaffelState.OPEN;
 
         emit RaffelWinner(winner); //cei check effects interactions
-        (bool success, ) = winner.call{value: address(this).balance}("");
+        (bool success,) = winner.call{value: address(this).balance}("");
         if (!success) {
             revert Raffel_NotTransfered();
         }
     }
 
-    //////////////////////////// 
+    ////////////////////////////
     /////// GETTER FUNCTIONS ////
     ////////////////////////////
 
     function getRaffelState() external view returns (RaffelState) {
         return s_raffelState;
     }
+
     function getPlayer(uint256 index) external view returns (address) {
         return s_players[index];
     }
+
     function getTicketFee() external view returns (uint256) {
         return i_ticketFee;
+    }
+
+    function getLastTimeStamp() external view returns (uint256) {
+        return s_lastTimeStamp;
+    }
+
+    function getRecentWinner() external view returns (address) {
+        return s_recentWinner;
     }
 }

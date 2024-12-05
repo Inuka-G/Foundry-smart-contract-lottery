@@ -25,6 +25,7 @@ contract HelperConfig is Script, CodeConstants {
         bytes32 gasLane; // keyHash
         uint32 callbackGasLimit;
         address link;
+        address account;
     }
     // Local network state variables
 
@@ -55,7 +56,8 @@ contract HelperConfig is Script, CodeConstants {
             subscriptionId: 0,
             gasLane: 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae, // keyHash
             callbackGasLimit: 500000,
-            link: address(0)
+            link: 0x514910771AF9Ca656af840dff83E8264EcF986CA,
+            account: 0x643315C9Be056cDEA171F4e7b2222a4ddaB9F88D
         });
     }
 
@@ -74,10 +76,11 @@ contract HelperConfig is Script, CodeConstants {
             ticketFee: 0.01 ether,
             intervalinSeconds: 30,
             vrfCoordinatorV2: address(vrfCoordinatorV2_5Mock),
-            subscriptionId: 0,
+            subscriptionId: 1,
             gasLane: 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae, // keyHash
             callbackGasLimit: 500000,
-            link: address(linkToken)
+            link: address(linkToken),
+            account: 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38
         });
     }
 

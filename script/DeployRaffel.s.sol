@@ -14,6 +14,7 @@ contract DeployRaffel is Script {
     }
 
     function deployContract() public returns (Raffle, HelperConfig) {
+        vm.roll(block.number + 1);
         HelperConfig helperConfig = new HelperConfig();
         HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
 

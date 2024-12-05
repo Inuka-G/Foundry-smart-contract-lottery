@@ -20,6 +20,7 @@ contract CreateSubscription is Script {
     function createSubscription(address vrfCoordinatorV2_5) public returns (uint256, address) {
         console.log("Creating subscription on chainId: ", block.chainid);
         vm.startBroadcast();
+        vm.roll(block.number + 1);
         uint256 subId = VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).createSubscription();
         vm.stopBroadcast();
         console.log("Your subscription Id is: ", subId);
@@ -62,7 +63,7 @@ contract FundSubscription is CodeConstants, Script {
         console.log("On ChainID: ", block.chainid);
         if (block.chainid == LOCAL_CHAIN_ID) {
             vm.startBroadcast();
-            VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).fundSubscription(subId, FUND_AMOUNT);
+            VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).fundSubscription(subId, FUND_AMOUNT * 2);
             vm.stopBroadcast();
         } else {
             console.log(LinkToken(link).balanceOf(msg.sender));
