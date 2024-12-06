@@ -2,15 +2,19 @@
 pragma solidity 0.8.19;
 
 import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
 import {Raffle} from "../src/Raffle.sol";
 import {HelperConfig} from "./HelperConfig.s.sol";
-import {CreateSubscription} from "./Interactions.s.sol";
-import {FundSubscription} from "./Interactions.s.sol";
-import {AddConsumer} from "./Interactions.s.sol";
+import {RandomGenSubcription} from "./Interactions.s.sol";
+
 
 contract DeployRaffel is Script {
-    function run() external {
+    uint256 subIdForChainLink;
+
+    function run() external returns (Raffle, HelperConfig) {
         deployContract();
+        
+       
     }
 
     function deployContract() public returns (Raffle, HelperConfig) {
@@ -18,16 +22,30 @@ contract DeployRaffel is Script {
         HelperConfig helperConfig = new HelperConfig();
         HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
 
-        if (config.subscriptionId == 0) {
-            CreateSubscription createSubscription = new CreateSubscription();
-            (config.subscriptionId, config.vrfCoordinatorV2) =
-                createSubscription.createSubscription(config.vrfCoordinatorV2);
+        // if (config.subscriptionId == 0) {
+        //     RandomGenSubcription randomGenSubcription = new RandomGenSubcription(
+        //         config.vrfCoordinatorV2,
+        //         config.link
+        //     );
 
-            FundSubscription fundSubscription = new FundSubscription();
-            fundSubscription.fundSubscription(config.vrfCoordinatorV2, config.subscriptionId, config.link);
-        }
+        //     randomGenSubcription.topUpSubscription(100 ether);
+        //     subIdForChainLink=randomGenSubcription.getSubscriptionId();
+        //     console.log("Subscription ID for ChainLink: ", subIdForChainLink);
+        // }
 
         vm.startBroadcast();
+        if (block.chainid == 31337) {
+            RandomGenSubcription randomGenSubcription = new RandomGenSubcription(
+                    config.vrfCoordinatorV2,
+                    config.link
+                );
+        }
+        // vm.roll(block.number + 5);
+
+        // randomGenSubcription.topUpSubscription(100);
+        // subIdForChainLink = randomGenSubcription.getSubscriptionId();
+        console.log("Subscription ID for ChainLink: ", subIdForChainLink);
+
         Raffle raffel = new Raffle(
             config.ticketFee,
             config.intervalinSeconds,
@@ -37,8 +55,9 @@ contract DeployRaffel is Script {
             config.callbackGasLimit
         );
         vm.stopBroadcast();
-        AddConsumer addConsumer = new AddConsumer();
-        addConsumer.addConsumer(address(raffel), config.vrfCoordinatorV2, config.subscriptionId);
+vm.warp(block.timestamp + (100 * 3)); 
         return (raffel, helperConfig);
     }
 }
+
+

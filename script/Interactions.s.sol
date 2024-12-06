@@ -1,110 +1,89 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.19;
+import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
+import {IVRFCoordinatorV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/interfaces/IVRFCoordinatorV2Plus.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
+import {console} from "forge-std/console.sol";
 
-import {Script, console} from "forge-std/Script.sol";
-import {HelperConfig} from "./HelperConfig.s.sol";
-import {Raffle} from "../src/Raffle.sol";
-import {DevOpsTools} from "../lib/foundry-devops/src/DevOpsTools.sol";
-import {VRFCoordinatorV2_5Mock} from "@chainlink/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
-import {LinkToken} from "../test/mocks/LinkMockToken.sol";
-import {CodeConstants} from "./HelperConfig.s.sol";
+contract RandomGenSubcription {
+    uint256 public s_requestId;
+    uint256 public s_subscriptionId;
+    IVRFCoordinatorV2Plus s_vrfCoordinator;
+    address owner;
 
-contract CreateSubscription is Script {
-    function createSubscriptionUsingConfig() public returns (uint256, address) {
-        HelperConfig helperConfig = new HelperConfig();
-        address vrfCoordinatorV2_5 = helperConfig.getConfigByChainId(block.chainid).vrfCoordinatorV2;
-        // address account = helperConfig.getConfigByChainId(block.chainid).account;
-        return createSubscription(vrfCoordinatorV2_5);
+    LinkTokenInterface linkToken;
+
+    ////////////////////////
+    ///////MODIFIERS////////
+    ////////////////////////
+
+    modifier onlyOwner() {
+        console.log("onwer", address(owner));
+        console.log("msg.sender", msg.sender);
+        require(msg.sender == owner, "Ownable: caller is not the owner");
+        _;
     }
 
-    function createSubscription(address vrfCoordinatorV2_5) public returns (uint256, address) {
-        console.log("Creating subscription on chainId: ", block.chainid);
-        vm.startBroadcast();
-        vm.roll(block.number + 1);
-        uint256 subId = VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).createSubscription();
-        vm.stopBroadcast();
-        console.log("Your subscription Id is: ", subId);
-        console.log("Please update the subscriptionId in HelperConfig.s.sol");
-        return (subId, vrfCoordinatorV2_5);
+    constructor(address vrfCoordinatorV2Plus, address link_token_contract) {
+        s_vrfCoordinator = IVRFCoordinatorV2Plus(vrfCoordinatorV2Plus);
+        linkToken = LinkTokenInterface(link_token_contract);
+        //Create a new subscription when you deploy the contract.
+        _createNewSubscription();
+        owner = msg.sender;
     }
 
-    function run() external returns (uint256, address) {
-        return createSubscriptionUsingConfig();
-    }
-}
-/////////////////////////////
-///////FUND SUB//////////////
-/////////////////////////////
-
-contract FundSubscription is CodeConstants, Script {
-    uint96 public constant FUND_AMOUNT = 3 ether;
-
-    function fundSubscriptionUsingConfig() public {
-        HelperConfig helperConfig = new HelperConfig();
-        uint256 subId = helperConfig.getConfig().subscriptionId;
-        address vrfCoordinatorV2_5 = helperConfig.getConfig().vrfCoordinatorV2;
-        address link = helperConfig.getConfig().link;
-        // address account = helperConfig.getConfig().account;
-
-        if (subId == 0) {
-            CreateSubscription createSub = new CreateSubscription();
-            (uint256 updatedSubId, address updatedVRFv2) = createSub.run();
-            subId = updatedSubId;
-            vrfCoordinatorV2_5 = updatedVRFv2;
-            console.log("New SubId Created! ", subId, "VRF Address: ", vrfCoordinatorV2_5);
-        }
-
-        fundSubscription(vrfCoordinatorV2_5, subId, link);
+    // Create a new subscription when the contract is initially deployed.
+    function _createNewSubscription() private {
+        s_subscriptionId = s_vrfCoordinator.createSubscription();
+        // Add this contract as a consumer of its own subscription.
+        s_vrfCoordinator.addConsumer(s_subscriptionId, address(this));
+        console.log("Subscription ID: ", s_subscriptionId);
     }
 
-    function fundSubscription(address vrfCoordinatorV2_5, uint256 subId, address link) public {
-        console.log("Funding subscription: ", subId);
-        console.log("Using vrfCoordinator: ", vrfCoordinatorV2_5);
-        console.log("On ChainID: ", block.chainid);
-        if (block.chainid == LOCAL_CHAIN_ID) {
-            vm.startBroadcast();
-            VRFCoordinatorV2_5Mock(vrfCoordinatorV2_5).fundSubscription(subId, FUND_AMOUNT * 2);
-            vm.stopBroadcast();
-        } else {
-            console.log(LinkToken(link).balanceOf(msg.sender));
-            console.log(msg.sender);
-            console.log(LinkToken(link).balanceOf(address(this)));
-            console.log(address(this));
-            vm.startBroadcast();
-            LinkToken(link).transferAndCall(vrfCoordinatorV2_5, FUND_AMOUNT, abi.encode(subId));
-            vm.stopBroadcast();
-        }
+    // Assumes this contract owns link.
+    // 1000000000000000000 = 1 LINK
+    function topUpSubscription(uint256 amount) external onlyOwner {
+        console.log("balance LINK of caller", linkToken.balanceOf(msg.sender));
+        console.log("block number ", block.number);
+        linkToken.transferAndCall(
+            address(s_vrfCoordinator),
+            amount,
+            abi.encode(s_subscriptionId)
+        );
     }
 
-    function run() external {
-        fundSubscriptionUsingConfig();
-    }
-}
-//////////////////////////////
-////////ADD CONSUMER /////////
-//////////////////////////////
-
-contract AddConsumer is Script {
-    function addConsumerUsingConfig(address mostRecentlyDeployed) public {
-        HelperConfig helperConfig = new HelperConfig();
-        uint256 subId = helperConfig.getConfig().subscriptionId;
-        address vrfCoordinatorV2_5 = helperConfig.getConfig().vrfCoordinatorV2;
-        // address account = helperConfig.getConfig().account;
-
-        addConsumer(mostRecentlyDeployed, vrfCoordinatorV2_5, subId);
+    function addConsumer(address consumerAddress) external {
+        // Add a consumer contract to the subscription.
+        s_vrfCoordinator.addConsumer(s_subscriptionId, consumerAddress);
     }
 
-    function addConsumer(address contractToAddToVrf, address vrfCoordinator, uint256 subId) public {
-        console.log("Adding consumer contract: ", contractToAddToVrf);
-        console.log("Using vrfCoordinator: ", vrfCoordinator);
-        console.log("On ChainID: ", block.chainid);
-        vm.startBroadcast();
-        VRFCoordinatorV2_5Mock(vrfCoordinator).addConsumer(subId, contractToAddToVrf);
-        vm.stopBroadcast();
+    function removeConsumer(address consumerAddress) external {
+        // Remove a consumer contract from the subscription.
+        s_vrfCoordinator.removeConsumer(s_subscriptionId, consumerAddress);
     }
 
-    function run() external {
-        address mostRecentlyDeployed = DevOpsTools.get_most_recent_deployment("Raffle", block.chainid);
-        addConsumerUsingConfig(mostRecentlyDeployed);
+    function cancelSubscription(address receivingWallet) external {
+        // Cancel the subscription and send the remaining LINK to a wallet address.
+        s_vrfCoordinator.cancelSubscription(s_subscriptionId, receivingWallet);
+        s_subscriptionId = 0;
+    }
+
+    // Transfer this contract's funds to an address.
+    // 1000000000000000000 = 1 LINK
+    function withdraw(uint256 amount, address to) external {
+        linkToken.transfer(to, amount);
+    }
+
+    //////////////////////////////////////
+    ///////GETTER FUNCTIONS///////////////
+    //////////////////////////////////////
+
+    function getSubscriptionId() external view returns (uint256) {
+        return s_subscriptionId;
+    }
+
+    function getRequestId() external view returns (uint256) {
+        return s_requestId;
     }
 }
