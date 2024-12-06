@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity 0.8.19;
 
-import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
-import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
-
 /**
  * @title Raffle contract
  * @author inukaG (onbehalf of AxionChainLabs)
@@ -11,25 +8,18 @@ import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/V
  * @dev Raffle contract for the Raffle dapp
  *
  */
-contract Raffle is VRFConsumerBaseV2Plus {
-    error Raffle__UpkeepNotNeeded(uint256 currentBalance, uint256 numPlayers, uint256 raffleState);
-    error Raffel_notEnoughEth();
-    error Raffel_NotTransfered();
-    error Raffel_notOpen();
+contract Raffle {
+    ////////////////////////////
+    ////// STATE VARIABLES ////
+    ////////////////////////////
 
     enum RaffelState {
         OPEN,
         CALCULATING
     }
 
-    uint256 private immutable i_subscriptionId;
-    bytes32 private immutable i_gasLane;
-    uint32 private immutable i_callbackGasLimit;
-    uint16 private constant REQUEST_CONFIRMATIONS = 3;
-    uint32 private constant NUM_WORDS = 1;
-    uint256 private immutable i_ticketFee;
-    uint256 private immutable i_intervalinSeconds;
-
+    uint256 private i_intervalinSeconds;
+    uint256 private i_ticketFee;
     uint256 private s_lastTimeStamp;
     address private s_recentWinner;
     RaffelState private s_raffelState;
@@ -37,23 +27,15 @@ contract Raffle is VRFConsumerBaseV2Plus {
 
     event RaffelEntered(address indexed player);
     event RaffelWinner(address indexed winner);
-    event RequestedRandomness(uint256 indexed requestId);
 
-    constructor(
-        uint256 ticketFee,
-        uint256 intervalinSeconds,
-        address vrfCoordinatorV2,
-        uint256 subscriptionId,
-        bytes32 gasLane, // keyHash
-        uint32 callbackGasLimit
-    ) VRFConsumerBaseV2Plus(vrfCoordinatorV2) {
-        i_intervalinSeconds = intervalinSeconds;
-        i_ticketFee = ticketFee;
-        i_gasLane = gasLane;
-        i_subscriptionId = subscriptionId;
+    error Raffle__PickWinnerNotNeeded(uint256 balance, uint256 length, uint256 state);
+    error Raffel_notEnoughEth();
+    error Raffel_notOpen();
+    error Raffel_NotTransfered();
 
-        s_lastTimeStamp = block.timestamp;
-        i_callbackGasLimit = callbackGasLimit;
+    constructor() {
+        i_intervalinSeconds = 30;
+        i_ticketFee = 0.001 ether;
         s_raffelState = RaffelState.OPEN;
     }
 
@@ -77,67 +59,23 @@ contract Raffle is VRFConsumerBaseV2Plus {
      * 3. The contract has ETH.
      * 4. Implicity, your subscription is funded with LINK.
      */
-    function checkUpkeep(bytes memory /* checkData */ )
-        public
-        view
-        returns (bool upkeepNeeded, bytes memory /* performData */ )
-    {
+    function checkRaffle() public view returns (bool upkeepNeeded) {
         bool isOpen = RaffelState.OPEN == s_raffelState;
         bool timePassed = ((block.timestamp - s_lastTimeStamp) > i_intervalinSeconds);
         bool hasPlayers = s_players.length > 0;
         bool hasBalance = address(this).balance > 0;
         upkeepNeeded = (timePassed && isOpen && hasBalance && hasPlayers);
-        return (upkeepNeeded, "0x0"); // can we comment this out?
+        return (upkeepNeeded); // can we comment this out?
     }
 
-    /**
-     * @dev Once `checkUpkeep` is returning `true`, this function is called
-     * and it kicks off a Chainlink VRF call to get a random winner.
-     */
-
-    // pickwinner func rename to performUpkeep
-
-    // function pickWinner() external {
-    //     if ((block.timestamp - s_lastTimeStamp) < i_intervalinSeconds) {
-    //         revert();
-    //     }
-    //     s_raffelState = RaffelState.CALCULATING;
-    //     uint256 requestId = s_vrfCoordinator.requestRandomWords(
-    //         VRFV2PlusClient.RandomWordsRequest({
-    //             keyHash: i_gasLane,
-    //             subId: i_subscriptionId,
-    //             requestConfirmations: REQUEST_CONFIRMATIONS,
-    //             callbackGasLimit: i_callbackGasLimit,
-    //             numWords: NUM_WORDS,
-    //             extraArgs: VRFV2PlusClient._argsToBytes(
-    //                 VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
-    //             )
-    //         })
-    //     );
-    // }
-
-    function performUpkeep(bytes calldata /* performData */ ) external {
+    function pickWinner() external {
         // since func is external validation implemented
-        (bool upkeepNeeded,) = checkUpkeep("");
-        if (!upkeepNeeded) {
-            revert Raffle__UpkeepNotNeeded(address(this).balance, s_players.length, uint256(s_raffelState));
+        bool checkGame = checkRaffle();
+        if (!checkGame) {
+            revert Raffle__PickWinnerNotNeeded(address(this).balance, s_players.length, uint256(s_raffelState));
         }
         s_raffelState = RaffelState.CALCULATING;
-        uint256 requestId = s_vrfCoordinator.requestRandomWords(
-            VRFV2PlusClient.RandomWordsRequest({
-                keyHash: i_gasLane,
-                subId: i_subscriptionId,
-                requestConfirmations: REQUEST_CONFIRMATIONS,
-                callbackGasLimit: i_callbackGasLimit,
-                numWords: NUM_WORDS,
-                extraArgs: VRFV2PlusClient._argsToBytes(VRFV2PlusClient.ExtraArgsV1({nativePayment: false}))
-            })
-        );
-        emit RequestedRandomness(requestId);
-    }
-
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal virtual override {
-        uint256 winnerIndex = randomWords[0] % s_players.length;
+        uint256 winnerIndex = 9 % s_players.length;
         address payable winner = s_players[winnerIndex];
         s_recentWinner = winner;
         s_players = new address payable[](0);
@@ -173,5 +111,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
 
     function getRecentWinner() external view returns (address) {
         return s_recentWinner;
+    }
+
+    function getPlayerCount() external view returns (uint256) {
+        return s_players.length;
     }
 }
